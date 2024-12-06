@@ -32,21 +32,26 @@ module VGA(
     input wire we2,
     output reg oe,
     output reg [7:0] num2,
+    output reg [7:0] num1,
     input targetClk
     );
     
     reg [7:0] addr;
     reg [7:0] dout;
     reg [7:0] mem [255:0];
-    reg p_we;
+    reg p_we, p_oe, tmp;
     
     initial begin
+        tmp = 0;
+        p_we = 0;
+        p_oe = 0;
         dout = 0;
         addr = 0;
     end
         
     always @(posedge targetClk) begin
-        if (we != p_we) begin
+        if (we != p_we || (tmp == 0 && we == 1)) begin
+            tmp = 1;
             mem[addr] = din;
             addr = addr + 1;
             p_we = we;
@@ -55,20 +60,22 @@ module VGA(
             mem[addr] = din;
             addr = addr + 1;
         end
-        if (reset || (oe && addr == 0)) begin
+        if (reset || (oe != p_oe && addr == 0)) begin
             dout = 0;
             addr = 0;
-            if (oe == 1) oe = 0;
+            if (oe != p_oe) p_oe = oe;
         end
-        if (oe) begin
+        if (oe != p_oe) begin
             if (addr > 0) begin
                 addr = addr - 1;
                 dout = mem[addr];
                 mem[addr] = 0;
             end
-            oe = 0;
+            p_oe = oe;
         end
-        num2 = addr + 48;
+        num1 = we + 48;
+        num2 = p_we + 48;
+//        num2 = addr + 48;
     end
     
     wire [2:0] rom_x;
@@ -82,13 +89,15 @@ module VGA(
     
     ASCIIRom rom(clk, rom_address, ascii_bit);
     
-//    assign ascii_bit_on = ((128 <= x && x < 136 + 8 * (addr - ((addr >> 3) << 3)) && 128 <= y && y < 144 + 16 * (addr >> 3)) ? ascii_bit : 1'b0);
-    
     always @* begin
         if (~video_on) rgb = 12'h000;
+        else if (x <= 64 || x >= 576 || y <= 64 || y >= 416) rgb = 12'h005;
         else begin
-            if (ascii_bit_on) rgb = 12'hAAA;
-            else rgb = 12'h005;
+            if (ascii_bit_on) rgb = 12'hAA0;
+            else begin
+                rgb[3:0] = (((640 - x) * 4'h8) + (x * 4'hB)) / 640;
+                rgb[11:4] = 8'h00;
+            end
         end
         if (128 <= y && y < 144 + 16 * (addr >> 3) && 128 <= x && x < 136 + 8 * (((y - 128) >> 4) < (addr >> 3) ? 7 : addr - ((addr >> 3) << 3))) begin
             rom_address = (mem[((x - 128) >> 3) + (((y - 128) >> 4) << 3)] << 7) + rom_x + (rom_y << 3);

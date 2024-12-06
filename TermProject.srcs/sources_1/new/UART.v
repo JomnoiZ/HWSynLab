@@ -36,13 +36,13 @@ module UART(
     input clk
     );
     
-    reg en, last_received;
+    reg en, last_received, last_received2;
     reg [7:0] data_in;
-    wire [7:0] data_out;
-    wire sent, received, baud;
+    wire [7:0] data_out, data_out2;
+    wire sent, received, received2, baud;
     
     baudrate_generator baudrate_gen(baud, clk);
-    uart_rx receiver_keyboard(received, data_out, RsRx, baud);
+    uart_rx receiver_keyboard(received2, data_out2, RsRx, baud);
     uart_rx receiver(received, data_out, Rx, baud);
     uart_tx transmitter(sent, data_in, Tx, en, baud);
     
@@ -60,7 +60,7 @@ module UART(
                 isThai = ~isThai;
             end
             else if (data_out == 127) begin
-                oe = 1;
+                oe = ~oe;
             end
             else begin
                 data_receive = data_out;
@@ -68,5 +68,12 @@ module UART(
             end
         end
         last_received = received;
+        
+        if (~last_received2 & received2) begin
+            data_in = data_out2;
+            num0 = data_out2;
+            en = 1;
+        end
+        last_received2 = received2;
     end
 endmodule

@@ -40,21 +40,11 @@ module system(
     output wire [3:0] an
     );
     
-    wire [7:0] num0;
-    wire [7:0] num1;
-    wire [7:0] num2;
-    reg [7:0] num3;
-    
-    wire video_on, p_tick;
-    wire [9:0] x, y;
-    wire [11:0] rgb;
-    wire [7:0] data_received;
-    
+    // Target Clock
     wire targetClk;
+    wire an0, an1, an2, an3;
     wire [18:0] tclk;
     assign tclk[0] = clk;
-    assign an = {an3, an2, an1, an0};
-    assign dp = 1;
     
     genvar c;
     generate for(c = 0; c < 18; c = c + 1)
@@ -65,29 +55,42 @@ module system(
     
     clockDiv fdivTarget(targetClk, tclk[18]);
     
+    // 7 Segment Display
+    wire [7:0] num0;
+    wire [7:0] num1;
+    wire [7:0] num2;
+    reg [7:0] num3;
+    
+    assign an = {an3, an2, an1, an0};
+    assign dp = 1;
+    
     quadSevenSeg q7Seg(seg, dp, an0, an1, an2, an3, num0, num1, num2, num3, targetClk);
     
-    wire reset, send, to_push, to_pop;
-    wire send_sw;
+    // Single Pulser With Buttons
+    wire reset, send, test_send;
     
     singlePulser spReset(reset, btnD, targetClk);
     singlePulser spPush(send, btnC, targetClk);
-    singlePulser spPushSW(send_sw, btnU, targetClk);
+    singlePulser spTestSend(test_send, btnU, targetClk);
     
     wire isThai;
-    wire [7:0] to_send_alp;
+    wire [7:0] data_received;
     reg [7:0] alp;
-    
-    assign to_send_alp = alp;
-    
-    UART uart(data_received, sw[7:0], num0, num1, to_push, to_pop, RsTx, RsRx, Tx, Rx, send, isThai, clk);
+   
+    // VGA
+    wire to_push, to_pop;
+    wire video_on, p_tick;
+    wire [9:0] x, y;
+    wire [11:0] rgb;
     
     VGASync sync(clk, reset, Hsync, Vsync, video_on, p_tick, x, y);
-
-    VGA vga(clk, reset, video_on, x, y, rgb, alp, sw, to_push, send_sw, to_pop, num2, targetClk);
-    
+    VGA vga(clk, reset, video_on, x, y, rgb, alp, sw[7:0], to_push, test_send, to_pop, num2, num1, targetClk);
     assign {vgaRed, vgaGreen, vgaBlue} = rgb;
     
+    // UART
+    UART uart(data_received, sw[7:0], num0, num1, to_push, to_pop, RsTx, RsRx, Tx, Rx, send, isThai, clk);
+    
+    // Display Alpha (Both English and Thai)
     always @(posedge targetClk) begin
         if (isThai) begin
             case (data_received)
@@ -167,6 +170,7 @@ module system(
         end   
         else alp = data_received;
     
-        num3 <= alp;
+        num3 = alp;
     end
 endmodule
+    
